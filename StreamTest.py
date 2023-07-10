@@ -16,6 +16,7 @@ from datetime import datetime, date,timedelta
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import panel as pn
+import plotly.express as px
 
 from datetime import date, timedelta
 pn.extension('tabulator')
@@ -30,9 +31,10 @@ st.title("Exemplar Dashboard")
 
 
 ## reading the data from url and looking for site from it
-df=pd.read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQi5lnVESmIFGng5PeZj2QYEM1hEcrGxmpTCidXkbHZmR-7eswXAsSqI0ZC02tdsJ5aTKzs56F_G0n7/pub?output=csv")
 
+df=pd.read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQi5lnVESmIFGng5PeZj2QYEM1hEcrGxmpTCidXkbHZmR-7eswXAsSqI0ZC02tdsJ5aTKzs56F_G0n7/pub?output=csv")
 df2=pd.read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQSjwmOOwc1iHvIl_gc1mlUB9Pa_rB7pwg__Agq7JQowZ8XvycnGG2AxsXyk9WDJ4h_clBt0jiceTDl/pub?output=csv")
+df3=pd.read_csv( "https://docs.google.com/spreadsheets/d/e/2PACX-1vT10tMtolzQfzmikUWpdP3K_r-9mC7K9xaOyzt7hwmKKF3WT9UTGPaNO4CndArmgsPVduNELK4Oeo1n/pub?gid=0&single=true&output=csv")
 
 # # taking site values
 # site_values= df['Site '].unique()
@@ -45,6 +47,7 @@ df2=pd.read_csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQSjwmOOwc1iHvI
  
 # # print the selected hobby
 # st.write("Your selected site is : ", site)
+
 
 ###___________________________
 
@@ -74,23 +77,100 @@ st.bar_chart(working_rightnow)
 
 
 
+
+###_____________________________________________________________________________
+
+## Highest priority Work  (SIDEBAR)
+
+###_____________________________________________________________________________
+
+
+
+# Top 10 priority task
+
+st.sidebar.header ("Top 10 Highest priority work")
+#creatin a column with high priority work
+#creatin a column with high priority work
+df2['Work_with_high_priority'] = df2['Work Order'].dropna().apply(lambda x: x.startswith(('AH','SH','AM','SM'))) 
+
+print(df2['Work_with_high_priority'])    
+def priority_table(df, selected_value):
+    filtered_df = df[df['Work_with_high_priority'] == selected_value ]
+    filtered_df= filtered_df[ filtered_df['Status']!='Completed']    
+    return filtered_df[[ 'Name ', 'Status']][:10]
+
+print(priority_table(df2,True))
+
+st.sidebar.table(priority_table(df2, True))
+
+
+
+###_____________________________________________________________________________
+
+## Name of the people checked In today(SIDEBAR)
+
+###_____________________________________________________________________________
+
+#st.sidebar.markdown('<p1 class="nicebar">People Clocked In Today </p1>', unsafe_allow_html=True)
+st.sidebar.header("People Clocked In Today")
+today = datetime.today().strftime("%m/%d/%Y")
+print(today)
+
+checkin_df = df3[df3['Date'] == today]
+checkin_df = checkin_df[['Name', 'Checkin_Time','Checkout_Time','Total_Hours']]
+
+# Getting today's time
+time_now = datetime.now()
+#st.write(time_now)
+
+# Calculate the duration for each row
+checkin_df['Duration'] = None
+for index, row in checkin_df.iterrows():
+    if pd.isnull(row['Checkout_Time']):
+        t = datetime.strptime(row['Checkin_Time'], "%I:%M:%S %p")  # Parse the time string
+        t = t.replace(year=time_now.year, month=time_now.month, day=time_now.day)  # Set the date to today's date
+
+        time_difference = round(((time_now - t).total_seconds() / 3600), 2)
+        checkin_df.at[index, 'Duration'] = (time_difference)
+    else:
+        checkin_df.at[index, 'Duration'] = row['Total_Hours']
+
+st.sidebar.write(checkin_df[['Name', 'Checkin_Time','Duration']])
+
+#st.sidebar.write(checkin_df)
+
+
 ####__________________________________________________________________________
 
 
-#writing 3 columns for Hours work  in a day/ Work in each week/ Works in month
+#writing 3 columns for Today's Hours work , Yesterday Hours work and Past week work
 
 ####_________________________________________________________________________
 
 
-st.header("Hour's tracker for workers")
+st.header("Time Tracker")
 
 col1, col2, col3 = st.columns(3)
 
+
 with col1:
+    st.header("Today's Hours")
+    st.write(today)
+    #fig_ = px.bar(checkin_df, x=checkin_df['Name'], y=checkin_df['Duration'])
+    #fig_.show()
+    #st.plotly_chart(fig_, theme=None, use_container_width=True)
+    today_whours={}
+    
+    st.bar_chart(data=checkin_df, x='Name',y='Duration')
+   
+
+with col2:
     st.header("Yesterday's Hours")
     today = datetime.today()
-    previous_day = date.today() - timedelta(days=2)
+    previous_day = date.today() - timedelta(days=1)
     previous_day_str = previous_day.strftime("%m/%d/%Y")
+    #st.write( today)
+    st.write(previous_day_str)
 
     worker_hours = {}
 
@@ -99,6 +179,12 @@ with col1:
         duration_col = f"Duration{i}"
     
         try:
+
+
+
+
+
+
             df_filtered = df2[df2[date_col] == previous_day_str]
         
             for index, row in df_filtered.iterrows():
@@ -150,7 +236,7 @@ with col1:
 
 
 
-with col2:
+with col3:
    
    st.header("Last Week's Hours")
    # Get the dates for the previous week
@@ -163,7 +249,7 @@ with col2:
 
 # print(last_monday)
 # print(last_sunday)
-
+   st.write (last_monday,"to",last_sunday)
    worker_hours2 = {}
 
    for i in range(1, 6):
@@ -212,13 +298,23 @@ with col2:
    # Get the dates for the previous week
    
 
-#__________________________________________________
- 
-# col3 is below for monthly data
+    
 
-#___________________________________________________    
+#########____________________________________________________________
 
-with col3:
+
+# Past pay period code and Curreent pay period graph 
+
+#########_________________________________________________________
+
+
+col1, col2 = st.columns(2)
+
+
+
+
+with col2:
+
    st.header("Last Pay Period")
 
    today = datetime.today()
@@ -233,8 +329,10 @@ with col3:
 
    start_date_str = start_date.strftime("%m/%d/%Y")
    end_date_str = end_date.strftime("%m/%d/%Y")
-   print(start_date_str)
-   print(end_date_str)
+   #print(start_date_str)
+   #print(end_date_str)
+
+   st.write(start_date_str ,"to", end_date_str)
    worker_hours3 = {}
 
    for i in range(1, 6):
@@ -278,19 +376,74 @@ with col3:
     # for name, hours in worker_hours3.items():
     #     print(f"{name}: {hours} hours")
    st.bar_chart(worker_hours3)
-   #st.image("https://static.streamlit.io/examples/owl.jpg")
 
 
-###_____________________________________________________________________________
+with col1:
+    st.header("Current Pay Period")
+   
+
+    curr_stdate=end_date +  timedelta(days=1)
+    curr_stdate_str=curr_stdate.strftime("%m/%d/%Y")
+    curr_end_date=datetime.today() - timedelta(days=1)
+    curr_endate_str=curr_end_date.strftime("%m/%d/%Y")
+    st.write(curr_stdate_str,"to",curr_endate_str)
+    #print(curr_stdate_str)
+    #print(curr_endate_str)
+
+
+    ## writind code to plot the duration graph between this time range
+
+    worker_hours4 = {}
+
+    for i in range(1, 6):
+        date_col = f"Date{i}"
+        duration_col = f"Duration{i}"
+        
+        try:
+            df_filtered = df2[(pd.to_datetime(df2[date_col]) >= pd.to_datetime(curr_stdate_str)) & (pd.to_datetime(df2[date_col]) <= pd.to_datetime(curr_endate_str))]
+            
+            for index, row in df_filtered.iterrows():
+                name = row['Name ']
+                
+                duration = row[duration_col]
+                
+                if pd.notnull(duration):
+                    duration = str(duration)  # Convert duration to string
+
+                    if ':' in duration:
+                        # duration_parts = duration.split(':')
+                        # hours = int(duration_parts[0])
+                        # minutes = int(duration_parts[1])
+                        # seconds = int(duration_parts[2].split()[0])
+                        
+                        total_hours3 = 0
+                        pass 
+                        
+                        if name in worker_hours4:
+                            worker_hours4[name] += round(total_hours3,2)
+                        else:
+                            worker_hours4[name] = round(total_hours3,2)
+                    else:
+                        if name in worker_hours4:
+                            worker_hours4[name] += round(float(duration),2)
+                        else:
+                            worker_hours4[name] = round(float(duration),2)
+                    
+        except KeyError:
+            continue
+    st.bar_chart(worker_hours4)
+
+###________________________________________________________________
+
 
 ## UTILAZATION /SPEEDOMETER
 
 ###_____________________________________________________________________________
 
-
+st.header(" KPIs")
 col1, col2 = st.columns(2)
 with col1: 
-    df3=pd.read_csv( "https://docs.google.com/spreadsheets/d/e/2PACX-1vT10tMtolzQfzmikUWpdP3K_r-9mC7K9xaOyzt7hwmKKF3WT9UTGPaNO4CndArmgsPVduNELK4Oeo1n/pub?gid=0&single=true&output=csv")
+    
 
     # Get the dates for the previous week
     today = datetime.today()
@@ -358,9 +511,9 @@ with col1:
     st.markdown('<p class="nicebar">Utilization Past Week</p>', unsafe_allow_html=True)
 
     selectes_name=st.selectbox("UTILIZATION LIST",utilization_dict.keys())
-    st.write(selectes_name)
+    st.write("Name: ",selectes_name)
 
-    st.write(utilization_dict[selectes_name])
+    st.write("Utilization:",utilization_dict[selectes_name])
     v=utilization_dict[selectes_name]
     fig = go.Figure(go.Indicator(
         domain = {'x': [0, 1], 'y': [0, 1]},
@@ -392,8 +545,8 @@ with col2:
     last_mon = last_sun - timedelta(days=6)
     last_monday = last_mon.strftime("%m/%d/%Y")
 
-    print(last_monday)
-    print(last_sunday)
+    #st.write(last_monday,"to",last_sunday)
+    #print(last_sunday),
 
     worker_hours2 = {}
 
@@ -458,14 +611,14 @@ with col2:
     st.markdown('<p class="nicebar">Efficiencies Past Week </p>', unsafe_allow_html=True)
 
     selected_wo=st.selectbox("Efficiencies of workorder ", efficiency_table['Work Order'])
-    st.write(selected_wo)
+    st.write("Work Order: ",selected_wo)
 
     selected_row = efficiency_table[efficiency_table['Work Order'] == selected_wo]
 
     # Display the selected work order
     # st.write(selected_row)
-    st.write(selected_row['Name'].iloc[0])
-    st.write(selected_row['Efficiency'].iloc[0])
+    st.write("Name: ",selected_row['Name'].iloc[0])
+    st.write("Efficiency: ", selected_row['Efficiency'].iloc[0])
     e=selected_row['Efficiency'].iloc[0]
     # print(e)
 
@@ -484,51 +637,6 @@ with col2:
 
 
 
-###_____________________________________________________________________________
-
-## Highest priority Work
-
-###_____________________________________________________________________________
-
-
-
-# Top 10 priority task
-
-st.sidebar.write ("Top 10 Highest priority work")
-#creatin a column with high priority work
-#creatin a column with high priority work
-df2['Work_with_high_priority'] = df2['Work Order'].dropna().apply(lambda x: x.startswith(('AH','SH','AM','SM'))) 
-
-print(df2['Work_with_high_priority'])    
-def priority_table(df, selected_value):
-    filtered_df = df[df['Work_with_high_priority'] == selected_value ]
-    filtered_df= filtered_df[ filtered_df['Status']!='Completed']    
-    return filtered_df[[ 'Name ', 'Status']][:10]
-
-print(priority_table(df2,True))
-
-st.sidebar.table(priority_table(df2, True))
-
-
-
-###_____________________________________________________________________________
-
-## Name of the people checked In today
-
-###_____________________________________________________________________________
-
-st.sidebar.markdown('<p1 class="nicebar">People Clocked In Today </p1>', unsafe_allow_html=True)
-
-today=datetime.today()
-today=today.strftime("%m/%d/%Y")
-print(today)
-
-checkin_df=df3[df3['Date']==today]
-
-checkin_df=checkin_df[['Name', 'Checkin_Time']]
-
-st.sidebar.table(checkin_df)
-
 
 
 ###_____________________________________________________________________________
@@ -539,8 +647,8 @@ st.sidebar.table(checkin_df)
 
 
 # code for order by sites
-st.markdown('<p1 class="nicebar">Work Order by sites </p1>', unsafe_allow_html=True)
-
+#st.markdown('<p1 class="nicebar">Work Order by sites </p1>', unsafe_allow_html=True)
+st.header("Work Order Status")
 site_values = df2['Site'].unique()
 site_values=np.append(site_values,"All_Sites")
 
