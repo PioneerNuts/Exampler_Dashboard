@@ -17,8 +17,11 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import panel as pn
 import plotly.express as px
+from zoneinfo import ZoneInfo
+import pytz
 
 from datetime import date, timedelta
+
 pn.extension('tabulator')
 
 
@@ -111,33 +114,35 @@ st.sidebar.table(priority_table(df2, True))
 
 ###_____________________________________________________________________________
 
-#st.sidebar.markdown('<p1 class="nicebar">People Clocked In Today </p1>', unsafe_allow_html=True)
 st.sidebar.header("People Clocked In Today")
 today = datetime.today().strftime("%m/%d/%Y")
-print(today)
 
 checkin_df = df3[df3['Date'] == today]
-checkin_df = checkin_df[['Name', 'Checkin_Time','Checkout_Time','Total_Hours']]
+checkin_df = checkin_df[['Name', 'Checkin_Time', 'Checkout_Time', 'Total_Hours']]
 
-# Getting today's time
-time_now = datetime.now()
-#st.write(time_now)
+# Define the time zone
+pst = pytz.timezone('US/Pacific')
+
+# Getting current time in PST
+time_now_pst = datetime.now(pst)
 
 # Calculate the duration for each row
 checkin_df['Duration'] = None
 for index, row in checkin_df.iterrows():
     if pd.isnull(row['Checkout_Time']):
-        t = datetime.strptime(row['Checkin_Time'], "%I:%M:%S %p")  # Parse the time string
-        t = t.replace(year=time_now.year, month=time_now.month, day=time_now.day)  # Set the date to today's date
-
-        time_difference = round(((time_now - t).total_seconds() / 3600), 2)
-        checkin_df.at[index, 'Duration'] = (time_difference)
+        t = datetime.strptime(row['Checkin_Time'], "%I:%M:%S %p")
+        t = t.replace(year=time_now_pst.year, month=time_now_pst.month, day=time_now_pst.day)
+        t = pst.localize(t)  # Convert t to PST time zone
+        
+        time_difference = round(((time_now_pst - t).total_seconds() / 3600), 2)
+        checkin_df.at[index, 'Duration'] = time_difference
     else:
         checkin_df.at[index, 'Duration'] = row['Total_Hours']
 
-st.sidebar.write(checkin_df[['Name', 'Checkin_Time','Duration']])
+st.sidebar.write(checkin_df[['Name', 'Checkin_Time', 'Duration']])
 
-#st.sidebar.write(checkin_df)
+
+
 
 
 ####__________________________________________________________________________
@@ -160,7 +165,7 @@ with col1:
     #fig_.show()
     #st.plotly_chart(fig_, theme=None, use_container_width=True)
     today_whours={}
-    
+
     st.bar_chart(data=checkin_df, x='Name',y='Duration')
    
 
@@ -179,11 +184,6 @@ with col2:
         duration_col = f"Duration{i}"
     
         try:
-
-
-
-
-
 
             df_filtered = df2[df2[date_col] == previous_day_str]
         
@@ -453,8 +453,8 @@ with col1:
     last_mon = last_sun - timedelta(days=6)
     last_monday=last_mon.strftime("%m/%d/%Y")
 
-    print(last_monday)
-    print(last_sunday)
+    #print(last_monday)
+    #print(last_sunday)
 
 
     #get the name off all people and add all the duration in 
@@ -487,55 +487,50 @@ with col1:
                 name_utl.append(item)
                 e=float((values/v)*100)
                 utl.append(e)
-
+    
     #creating the name and efficiencis dectionary
     utilization_dict=dict(zip(name_utl,utl))
     #print(efficiency_dict)
     #cheating a dropbox to chose the me form the
 
-    st.markdown(
-        """
-        <style>
-        .nicebar {
-            background-color: lightblue;
-            color: black;
-            font-weight: bold;
-            padding: 8px;
-            border-radius: 4px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
-    st.markdown('<p class="nicebar">Utilization Past Week</p>', unsafe_allow_html=True)
+    st.markdown('<p class="nicebar">Utilization Past Week </p>', unsafe_allow_html=True)
+    selectes_name = st.selectbox("UTILIZATION LIST", utilization_dict.keys())
+    st.write("Name: ", selectes_name)
 
-    selectes_name=st.selectbox("UTILIZATION LIST",utilization_dict.keys())
-    st.write("Name: ",selectes_name)
+    
+    if utilization_dict and selectes_name is not None:
+        v = utilization_dict.get(selectes_name)
+        if v is not None:
+            st.write("Utilization:", v)
+            
+            # Create the gauge chart only if data is available
+            fig = go.Figure(go.Indicator(
+                domain={'x': [0, 1], 'y': [0, 1]},
+                value=v,
+                mode="gauge+number",
+                title={'text': "UTILIZATION "},
+                gauge={'axis': {'range': [None, 500]},
+                    'steps': [
+                        {'range': [0, 250], 'color': "yellow"},
+                        {'range': [250, 500], 'color': "lavender"}],
+                    'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 490}}))
 
-    st.write("Utilization:",utilization_dict[selectes_name])
-    v=utilization_dict[selectes_name]
-    fig = go.Figure(go.Indicator(
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        value = v,
-        mode = "gauge+number",
-        title = {'text': "UTILIZATION "},
-        gauge = {'axis': {'range': [None, 500]},
-                'steps' : [
-                    {'range': [0, 250], 'color': "yellow"},
-                    {'range': [250, 500], 'color': "lavender"}],
-                'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 490}}))
+            st.plotly_chart(fig, theme=None, use_container_width=True)
+        else:
+            st.write("No utilization data available for the selected name.")
+    else:
+        st.write("No data available. The dictionary is empty.")
 
 
-    st.plotly_chart(fig, theme=None, use_container_width=True)
 
-###_____________________________________________________________________________
+# ###_____________________________________________________________________________
 
-## EFFICIENCY /SPEEDOMETER for past week
+# ## EFFICIENCY /SPEEDOMETER for past week
 
-###_____________________________________________________________________________
+# ###_____________________________________________________________________________
 
-# Get the dates for the previous week
+# # Get the dates for the previous week
 
 with col2: 
     today = datetime.today()
@@ -593,48 +588,54 @@ with col2:
     ef_table = pd.DataFrame(table_ef)
 
     # Display the table
-    print(ef_table)
+    #print(ef_table)
     # st.write(ef_table)
 
     #converting the string to float
-    ef_table['Assigned Hours']=ef_table['Assigned Hours'].astype(float)
+    ef_table['Assigned Hours'] = ef_table['Assigned Hours'].astype(float)
 
-    # in the abobe table writing effenciency formula and addin a new coulmn of effenciecy 
-    ef_final= { 'Work Order':ef_table['Work Order'],
-            'Name': ef_table['Name'],
-            'Efficiency': round((ef_table['Assigned Hours']/ef_table['Total Duration']*100),2)}
-    efficiency_table=pd.DataFrame(ef_final)
+    # in the abobe table writing effenciency formula and adding a new column of efficiency 
+    ef_final = {'Work Order': ef_table['Work Order'],
+                'Name': ef_table['Name'],
+                'Efficiency': round((ef_table['Assigned Hours'] / ef_table['Total Duration'] * 100), 2)}
+    efficiency_table = pd.DataFrame(ef_final)
     #st.write(efficiency_table)
 
-   
-    #using css from avobe
+    #using css from above
     st.markdown('<p class="nicebar">Efficiencies Past Week </p>', unsafe_allow_html=True)
 
-    selected_wo=st.selectbox("Efficiencies of workorder ", efficiency_table['Work Order'])
-    st.write("Work Order: ",selected_wo)
+    selected_wo = st.selectbox("Efficiencies of workorder ", efficiency_table['Work Order'])
+    st.write("Work Order: ", selected_wo)
 
     selected_row = efficiency_table[efficiency_table['Work Order'] == selected_wo]
 
-    # Display the selected work order
-    # st.write(selected_row)
-    st.write("Name: ",selected_row['Name'].iloc[0])
-    st.write("Efficiency: ", selected_row['Efficiency'].iloc[0])
-    e=selected_row['Efficiency'].iloc[0]
-    # print(e)
+    if not efficiency_table.empty:
+        if selected_row.empty:
+            st.write("No data available for the selected work order.")
+        else:
+            # Display the selected work order
+            # st.write(selected_row)
+            st.write("Name: ", selected_row['Name'].iloc[0])
+            st.write("Efficiency: ", selected_row['Efficiency'].iloc[0])
+            e = selected_row['Efficiency'].iloc[0]
+            # print(e)
 
-    fig2= go.Figure(go.Indicator(
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        value = e,
-        mode = "gauge+number",
-        title = {'text': "Efficiency"},
-        gauge = {'axis': {'range': [None, 300]},
-                'steps' : [
-                    {'range': [0, 250], 'color': "yellow"},
-                    {'range': [250, 500], 'color': "lavender"}],
-                'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 290}}))
+            fig2 = go.Figure(go.Indicator(
+                domain={'x': [0, 1], 'y': [0, 1]},
+                value=e,
+                mode="gauge+number",
+                title={'text': "Efficiency"},
+                gauge={'axis': {'range': [None, 300]},
+                       'steps': [
+                           {'range': [0, 250], 'color': "yellow"},
+                           {'range': [250, 500], 'color': "lavender"}],
+                       'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 290}}))
 
-    st.plotly_chart(fig2, theme=None, use_container_width=True)
+            st.plotly_chart(fig2, theme=None, use_container_width=True)
+    else:
+        st.write("No efficiency data available. The dictionary is empty.")
 
+    
 
 
 
